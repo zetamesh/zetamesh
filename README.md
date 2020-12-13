@@ -32,10 +32,16 @@ This section will give you some instructions to make you quick start with Zetame
         $ bin/zetamesh join --address 10.0.0.101 --gateway ${gateway}:2823
         ```
 
-- Test your LAN (at the peer node 1)
+- Test your LAN (at the peer node 2)
 
     ```
-    $ ping 10.0.0.101
+    $ ping 10.0.0.100
+    PING 10.0.0.100 (10.0.0.100): 56 data bytes
+    Request timeout for icmp_seq 0
+    64 bytes from 10.0.0.100: icmp_seq=1 ttl=64 time=17.239 ms
+    64 bytes from 10.0.0.100: icmp_seq=2 ttl=64 time=15.449 ms
+    64 bytes from 10.0.0.100: icmp_seq=3 ttl=64 time=14.627 ms
+    64 bytes from 10.0.0.100: icmp_seq=4 ttl=64 time=15.418 ms
     ```
 
 ## Features
