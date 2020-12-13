@@ -1,0 +1,63 @@
+// Copyright 2020 ZetaMesh Authors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+option go_package = "/message";
+
+enum PacketType {
+  Heartbeat = 0;
+  Relay = 1;
+  OpenTunnel = 2;
+  OpenTunnelAck = 3;
+  Ping = 4;
+  Pong = 5;
+  Data = 6;
+}
+
+message CtrlHeartbeat {
+  string virtAddress = 1;
+}
+
+message CtrlPing {
+  string virtAddress = 1;
+  string nonce = 2;
+}
+
+message CtrlPong {
+  string virtAddress = 1;
+  string nonce = 2;
+}
+
+message CtrlOpenTunnel {
+  int64 ackId = 1;
+  string virtAddress = 2;
+  string udpAddress = 3;
+}
+
+message CtrlOpenTunnelAck {
+  int64 ackId = 1;
+}
+
+message CtrlRelay {
+  string virtAddress = 1;
+  bytes data = 2;
+}
+
+enum StatusCode {
+  Success = 0;
+  ServerInternal = 1;
+  InvalidVersion = 2;
+  AddConflicted = 3;
+  VersionTooOld = 4;
+  KeyNotMatched = 5;
+}
