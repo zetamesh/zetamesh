@@ -106,7 +106,7 @@ func (c *connection) loop() {
 
 		case <-keepalive.C:
 			// Keepalive timeout and close currently connection to wait reconnect
-			if c.keepalive.Add(constant.PeerKeepaliveDuration * 2 / 3).Before(time.Now()) {
+			if c.keepalive.Add(constant.PeerKeepaliveDuration * 2).Before(time.Now()) {
 				c.close()
 				continue
 			}
