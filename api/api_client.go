@@ -22,7 +22,6 @@ import (
 
 	"github.com/lonng/zetamesh/version"
 	"github.com/pkg/errors"
-	"go.uber.org/zap"
 )
 
 // Client is used to access with the remote gateway
@@ -71,17 +70,15 @@ func (c *Client) do(method, api string, reader io.Reader, res interface{}) error
 	if err != nil {
 		return errors.WithStack(err)
 	}
+	defer request.Body.Close()
 
 	// Set the request headers
 	request.Header.Set("Content-Type", "application/json; charset=utf-8")
-
-	zap.L().Info("request", zap.Reflect("req", request.Method))
 
 	resp, err := http.DefaultClient.Do(request)
 	if err != nil {
 		return errors.WithStack(err)
 	}
-	zap.L().Info("request", zap.Reflect("req", request.Method))
 
 	if resp.StatusCode != http.StatusOK {
 		return errors.New(resp.Status)
