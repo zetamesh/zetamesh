@@ -160,30 +160,30 @@ func (n *Node) serveVeth(ctx context.Context) {
 }
 
 func (n *Node) forward(virtAddress string, data []byte) {
-	zap.L().Debug("Send packet", zap.String("dest", virtAddress))
+	zap.L().Debug("Send packet", zap.String("peer", virtAddress))
 
 	// Open a new tunnel if cannot find the connection between the peers
 	conn, found := n.connections.Load(virtAddress)
 	if found {
 		conn := conn.(*connection)
-		if conn.state != StateEstablished {
-			zap.L().Debug("Relay data due to connection not ready", zap.Reflect("state", conn.state))
+		if conn.state == StateEstablished {
+			// We must make a copy of the data
+			dataCopy := make([]byte, len(data))
+			copy(dataCopy, data)
+
+			select {
+			case conn.pipeline <- codec.EncodeRaw(dataCopy):
+			default:
+				zap.L().Warn("Drop data due to channel full", zap.Reflect("peer", virtAddress))
+			}
+		} else {
 			_, _ = n.gateway.Write(codec.Encode(message.PacketType_Relay, &message.CtrlRelay{
 				VirtAddress: virtAddress,
 				Data:        data,
 			}))
-			return
+			zap.L().Debug("Relay data due to connection not ready", zap.Stringer("state", conn.state), zap.Int("length", len(data)))
 		}
 
-		// We must make a copy of the data
-		dataCopy := make([]byte, len(data))
-		copy(dataCopy, data)
-
-		select {
-		case conn.pipeline <- codec.EncodeRaw(dataCopy):
-		default:
-			zap.L().Warn("Drop data due to channel full", zap.Reflect("destination", virtAddress))
-		}
 		return
 	}
 
@@ -200,7 +200,7 @@ func (n *Node) forward(virtAddress string, data []byte) {
 		defer n.pending.Delete(virtAddress)
 		err := n.apiClient.OpenTunnel(n.opt.Address, virtAddress)
 		if err != nil {
-			zap.L().Error("Try to establish connection failed", zap.Error(err), zap.String("dest", virtAddress))
+			zap.L().Error("Try to establish connection failed", zap.Error(err), zap.String("peer", virtAddress))
 		}
 	}()
 }
