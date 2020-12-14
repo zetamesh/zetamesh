@@ -62,10 +62,9 @@ func (n *Node) handlePacket(remote net.Addr, data []byte) {
 	payload := data[1:]
 	if packetType == message.PacketType_Data {
 		zap.L().Debug("Receive packet", zap.Stringer("source", remote))
-		_, err := n.veth.Write(payload)
-		if err != nil {
-			zap.L().Error("Write payload to the virtual interface failed", zap.Stringer("source", remote), zap.Error(err))
-		}
+		dataCopy := make([]byte, len(payload))
+		copy(dataCopy, payload)
+		n.pipeline <- dataCopy
 		return
 	}
 

@@ -51,7 +51,7 @@ This section will give you some instructions to make you quick start with Zetame
 - [ ] Support more operation systems
     - [x] Support MacOS
     - [x] Support Linux
-    - [ ] Support Windows
+    - [x] Support Windows
     - [ ] Support iOS
     - [ ] Support Android
 - [ ] Support traffic encryption

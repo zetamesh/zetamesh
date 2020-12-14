@@ -26,8 +26,8 @@ import (
 	"github.com/lonng/zetamesh/codec"
 	"github.com/lonng/zetamesh/constant"
 	"github.com/lonng/zetamesh/message"
+	"github.com/lonng/zetamesh/node/tun"
 	"github.com/pkg/errors"
-	"github.com/songgao/water"
 	"go.uber.org/zap"
 )
 
@@ -47,7 +47,7 @@ type Node struct {
 	apiClient *api.Client
 	dialer    *net.Dialer
 	gateway   *net.UDPConn
-	veth      *water.Interface
+	pipeline  chan []byte
 
 	mask        net.IP   // Only packet sent to the same subnet will be handled
 	pending     sync.Map // virtAddr -> time.Time
@@ -59,6 +59,7 @@ func New(opt Options) *Node {
 	return &Node{
 		opt:       opt,
 		apiClient: api.NewClient(opt.Gateway, opt.Key, opt.TLS),
+		pipeline:  make(chan []byte, 512),
 	}
 }
 
@@ -98,16 +99,16 @@ func (n *Node) Serve() error {
 	zap.L().Info("Setup local address successfully", zap.Stringer("local", conn.LocalAddr()))
 
 	// Setup virtual network interface tunnel
-	err = n.setupTunnel()
+	dev, err := tun.NewTUN(n.opt.Address)
 	if err != nil {
 		return err
 	}
-	defer n.veth.Close()
+	defer dev.Close()
 
-	zap.L().Info("Setup virtual network successfully", zap.String("interface", n.veth.Name()))
+	zap.L().Info("Setup virtual network successfully", zap.String("interface", dev.Name()))
 
 	// Begin virtual network interface traffic handling
-	go n.serveVeth(ctx)
+	go n.serveDev(ctx, dev)
 
 	// Begin forward heartbeat message eventually
 	go n.heartbeat(ctx)
@@ -123,40 +124,63 @@ func (n *Node) Stop() {
 	}
 }
 
-func (n *Node) serveVeth(ctx context.Context) {
-	buffer := make([]byte, constant.MaxBufferSize)
-	for {
-		select {
-		case <-ctx.Done():
-			zap.L().Info("Serve virtual device cancelled", zap.Error(ctx.Err()))
-			return
+func (n *Node) serveDev(ctx context.Context, dev tun.Device) {
+	read := func() {
+		buffer := make([]byte, constant.MaxBufferSize)
+		for {
+			select {
+			case <-ctx.Done():
+				zap.L().Info("Serve virtual device read cancelled", zap.Error(ctx.Err()))
+				return
 
-		default:
-			c, err := n.veth.Read(buffer)
-			if err != nil {
-				continue
-			}
-			packet := gopacket.NewPacket(buffer[:c], layers.LayerTypeIPv4, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
-			ipv4, ok := packet.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
-			if !ok {
-				continue
-			}
+			default:
+				c, err := dev.Read(buffer)
+				if err != nil {
+					continue
+				}
+				packet := gopacket.NewPacket(buffer[:c], layers.LayerTypeIPv4, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
+				ipv4, ok := packet.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
+				if !ok {
+					continue
+				}
 
-			// Skip the packet because it has different subnet
-			if !ipv4.DstIP.Mask(subnetMask).Equal(n.mask) {
-				continue
-			}
+				// Skip the packet because it has different subnet
+				if !ipv4.DstIP.Mask(subnetMask).Equal(n.mask) {
+					continue
+				}
 
-			// Write pipeline back if the destination is the current virtual address
-			destination := ipv4.DstIP.String()
-			if destination == n.opt.Address {
-				_, _ = n.veth.Write(buffer[:c])
-				continue
-			}
+				// Write pipeline back if the destination is the current virtual address
+				destination := ipv4.DstIP.String()
+				if destination == n.opt.Address {
+					dataCopy := make([]byte, c)
+					copy(dataCopy, buffer[:c])
+					n.pipeline <- dataCopy
+					continue
+				}
 
-			n.forward(destination, buffer[:c])
+				n.forward(destination, buffer[:c])
+			}
 		}
 	}
+
+	write := func() {
+		for {
+			select {
+			case <-ctx.Done():
+				zap.L().Info("Serve virtual device write cancelled", zap.Error(ctx.Err()))
+				return
+
+			case data := <-n.pipeline:
+				_, err := dev.Write(data)
+				if err != nil {
+					zap.L().Error("Write data into virtual device failed", zap.Error(err))
+				}
+			}
+		}
+	}
+
+	go read()
+	go write()
 }
 
 func (n *Node) forward(virtAddress string, data []byte) {

@@ -23,7 +23,7 @@ FILES     := $$(find . -name "*.go")
 FAILPOINT_ENABLE  := $$(find $$PWD/ -type d | grep -vE "(\.git|tools)" | xargs tools/bin/failpoint-ctl enable)
 FAILPOINT_DISABLE := $$(find $$PWD/ -type d | grep -vE "(\.git|tools)" | xargs tools/bin/failpoint-ctl disable)
 
-default: fmt check proto zetamesh
+default: fmt proto zetamesh
 
 zetamesh:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/zetamesh .
